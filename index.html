@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Chat MQTT - Mi Aplicación</title>
+    <script src="paho.javascript-1.0.3/paho-mqtt-min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        form {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        input {
+            margin-bottom: 10px;
+            padding: 10px;
+            width: 100%;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+
+<body>
+
+    <form onsubmit="formActivada(event)">
+        <h1>Chat</h1>
+        <p>
+            <label>
+                Alias *
+                <input id="inputAlias" required>
+            </label>
+        </p>
+        <p>
+            <label>
+                Mensaje *
+                <input id="inputMensaje" required>
+            </label>
+        </p>
+        <p>* Obligatorio</p>
+        <p><button type="submit">Enviar</button></p>
+        <pre id="pre"></pre>
+    </form>
+
+    <script type="module">
+        import { exportaAHtml } from "./lib/js/exportaAHtml.js"
+        import { creaIdCliente } from "./lib/js/creaIdCliente.js"
+        import { falloEnLaConexionMqtt } from "./lib/js/falloEnLaConexionMqtt.js"
+        import { conexionMqttPerdida } from "./lib/js/conexionMqttPerdida.js"
+        import { muestraError } from "./lib/js/muestraError.js"
+
+        const TOPICO_CHAT = "miChat/miSala"
+        const clientId = creaIdCliente("miChat-")
+
+        const cliente = new Paho.MQTT.Client("test.mosquitto.org", 8081, clientId)
+
+        function formActivada(event) {
+            try {
+                event.preventDefault()
+                const mensaje = `Usuario: ${inputAlias.value.trim()}\nMensaje: ${inputMensaje.value.trim()}`
+                enviaMensajeMqtt(mensaje, TOPICO_CHAT)
+            } catch (error) {
+                muestraError(error)
+                alert("Ocurrió un error al intentar enviar el mensaje. Por favor, inténtalo de nuevo.")
+            }
+        }
+        exportaAHtml(formActivada)
+
+        cliente.onMessageArrived = mensaje => {
+            if (mensaje.destinationName === TOPICO_CHAT) {
+                pre.textContent += mensaje.payloadString + "\n\n"
+            }
+        }
+
+        cliente.onConnectionLost = conexionMqttPerdida
+
+        cliente.connect({
+            keepAliveInterval: 10,
+            useSSL: true,
+            onFailure: falloEnLaConexionMqtt,
+            onSuccess: () => {
+                console.log("Conectado a la sala de chat")
+                cliente.subscribe(TOPICO_CHAT)
+            },
+        })
+
+        function enviaMensajeMqtt(mensaje, topico) {
+            const mensajeMqtt = new Paho.MQTT.Message(mensaje)
+            mensajeMqtt.destinationName = topico
+            cliente.send(mensajeMqtt)
+        }
+    </script>
+
+</body>
+
+</html>
